@@ -1,5 +1,8 @@
 import asyncio
+import json
+import os
 import re
+import sys
 from urllib.parse import unquote, urlsplit
 
 import httpx
@@ -7,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from edstem_mcp.catalog import EdError
 from edstem_mcp.config import tls_context
-from edstem_mcp.content import MAX_FILE_BYTES, extract_text, text_slice
+from edstem_mcp.content import MAX_FILE_BYTES, text_slice
 
 SOURCES = {"thread", "course_thread", "resources", "lesson", "slide"}
 CDN = "static.us.edusercontent.com"
@@ -77,10 +80,9 @@ async def list_attachments(client, operation: str, path: dict) -> dict:
     }
 
 
-async def read_attachment(
-    client, operation: str, path: dict, index: int, offset=0, max_chars=12000, *, transport=None
-) -> dict:
-    text_slice("", offset, max_chars)
+async def download_attachment(
+    client, operation, path, index, *, transport=None, max_bytes=MAX_FILE_BYTES
+):
     if type(index) is not int or index < 0:
         raise EdError("Attachment index must be a nonnegative integer.")
     items = (await list_attachments(client, operation, path))["attachments"]
@@ -110,15 +112,50 @@ async def read_attachment(
             body = bytearray()
             async for chunk in response.aiter_bytes():
                 body.extend(chunk)
-                if len(body) > MAX_FILE_BYTES:
-                    raise EdError("Attachment exceeds the 25 MiB limit.", "size_limit")
+                if len(body) > max_bytes:
+                    raise EdError("Attachment exceeds this tool's byte limit.", "size_limit")
             mime = response.headers.get("content-type", "").split(";", 1)[0].lower()
             disposition = response.headers.get("content-disposition", "")
             match = re.search(r'filename="?([^";]+)', disposition)
             filename = match[1] if match else item["name"]
     except (httpx.RequestError, TimeoutError):
         raise EdError("Cannot read the attachment securely.", "connection_error") from None
-    text, warning = await asyncio.to_thread(extract_text, bytes(body), filename, mime)
+    return item, bytes(body), mime, filename
+
+
+async def read_attachment(
+    client, operation: str, path: dict, index: int, offset=0, max_chars=12000, *, transport=None
+) -> dict:
+    text_slice("", offset, max_chars)
+    item, body, mime, filename = await download_attachment(
+        client, operation, path, index, transport=transport
+    )
+    if mime.startswith("image/"):
+        raise EdError("Use edstem_read_image for PNG or JPEG attachments.")
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-m",
+        "edstem_mcp.extract_worker",
+        filename,
+        mime,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+        env={"PATH": os.defpath},
+    )
+    try:
+        output, _ = await asyncio.wait_for(process.communicate(body), timeout=25)
+    finally:
+        if process.returncode is None:
+            process.kill()
+            await process.wait()
+    try:
+        extracted = json.loads(output)
+        text, warning = extracted["text"], extracted["warning"]
+    except (ValueError, KeyError):
+        raise EdError(
+            "Document extraction failed or exceeded its limits.", "extraction_error"
+        ) from None
     return {
         "attachment": item,
         "content_type": mime,

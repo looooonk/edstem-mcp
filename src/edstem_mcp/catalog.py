@@ -11,6 +11,12 @@ class EdError(ValueError):
 
 
 @dataclass(frozen=True)
+class TextParam:
+    required: bool = False
+    max_length: int = 300
+
+
+@dataclass(frozen=True)
 class Operation:
     path: str
     summary: str
@@ -150,6 +156,64 @@ OPERATIONS = {
     ),
 }
 
+OPERATIONS.update(
+    {
+        "native_search": Operation(
+            "/courses/{course_id}/threads/search",
+            "Search the whole course using Ed's native index.",
+            PAGE
+            | {
+                "query": TextParam(required=True),
+                "category": TextParam(),
+                "subcategory": TextParam(),
+                "subsubcategory": TextParam(),
+            },
+            "threads",
+            True,
+            "ed-web-client",
+            "Returns Ed's total and paginated matches. Index freshness and reply coverage are "
+            "controlled by Ed; use local search with include_replies for explicit reply scanning.",
+        ),
+        "user_stats": Operation(
+            "/users/{user_id}/profile/stats",
+            "Visible profile activity statistics.",
+            {"courseID": (1, 2**63 - 1, None)},
+            evidence="ed-web-client",
+        ),
+        "user_resources": Operation(
+            "/users/resources",
+            "Resources across your accessible courses.",
+            {"realm_id": (1, 2**63 - 1, None)},
+            "resources",
+            evidence="ed-web-client",
+        ),
+        "user_lessons": Operation(
+            "/users/lessons",
+            "Lessons and modules across your accessible courses.",
+            collection="lessons",
+            evidence="ed-web-client",
+        ),
+        "snippets": Operation(
+            "/courses/{course_id}/snippets",
+            "Saved course code snippets; never runs code.",
+            collection="snippets",
+            evidence="ed-web-client",
+        ),
+        "labs": Operation(
+            "/courses/{course_id}/labs",
+            "Course lab or tutorial groups.",
+            collection="labs",
+            evidence="ed-web-client",
+        ),
+        "lab_categories": Operation(
+            "/courses/{course_id}/lab_categories",
+            "Course lab group categories.",
+            collection="categories",
+            evidence="ed-web-client",
+        ),
+    }
+)
+
 
 def operation(name: str) -> Operation:
     if name not in OPERATIONS:
@@ -171,7 +235,20 @@ def prepare(name: str, path: dict, query: dict) -> tuple[str, dict]:
         )
     clean = {}
     for key, spec in op.query.items():
-        if isinstance(spec[0], int):
+        if isinstance(spec, TextParam):
+            if key not in query and not spec.required:
+                continue
+            value = query.get(key)
+            if (
+                not isinstance(value, str)
+                or not value.strip()
+                or len(value) > spec.max_length
+                or any(ord(c) < 32 for c in value)
+            ):
+                raise EdError(
+                    "Text query parameter is missing or invalid; inspect operation bounds."
+                )
+        elif isinstance(spec[0], int):
             value = query.get(key, spec[2])
             if value is None and key not in query:
                 continue
@@ -196,8 +273,12 @@ def describe(name: str) -> dict:
         "query": {
             k: (
                 {"min": v[0], "max": v[1], "default": v[2]}
-                if isinstance(v[0], int)
-                else {"choices": v, "default": v[0]}
+                if not isinstance(v, TextParam) and isinstance(v[0], int)
+                else (
+                    {"type": "text", "required": v.required, "max_length": v.max_length}
+                    if isinstance(v, TextParam)
+                    else {"choices": v, "default": v[0]}
+                )
             )
             for k, v in op.query.items()
         },

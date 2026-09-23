@@ -10,7 +10,8 @@ from edstem_mcp.config import BASE_URL, Settings
 def test_catalog_read_only(name):
     spec = describe(name)
     path = dict.fromkeys(spec["path_parameters"], 123)
-    endpoint, query = prepare(name, path, {})
+    params = {k: "example" for k, v in spec["query"].items() if v.get("required")}
+    endpoint, query = prepare(name, path, params)
     assert endpoint.startswith("/") and "view" not in query
     assert spec["method"] == "GET"
 

@@ -18,6 +18,7 @@ TOOL_NAMES = {
     "edstem_search_threads",
     "edstem_list_attachments",
     "edstem_read_attachment",
+    "edstem_read_image",
 }
 
 
@@ -28,9 +29,14 @@ class ErrorLog:
     def record(self, event: str, error: Exception, *, tool=None, operation=None):
         cause = error
         seen = set()
-        while cause.__cause__ is not None and id(cause) not in seen:
+        while id(cause) not in seen:
             seen.add(id(cause))
-            cause = cause.__cause__
+            if isinstance(cause, BaseExceptionGroup) and cause.exceptions:
+                cause = cause.exceptions[0]
+            elif cause.__cause__ is not None:
+                cause = cause.__cause__
+            else:
+                break
         record = {
             "time": datetime.now(UTC).isoformat(),
             "event": event,
