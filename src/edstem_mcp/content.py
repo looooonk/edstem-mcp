@@ -16,8 +16,8 @@ def html_text(value: str) -> str:
     soup = BeautifulSoup(value, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
-    for link in soup.find_all("a", href=True):
-        href = link["href"]
+    for link in soup.find_all(["a", "link", "file", "image"]):
+        href = link.get("href") or link.get("url") or link.get("src") or ""
         if href.startswith(("https://", "http://", "/")):
             link.append(f" ({href})")
     return soup.get_text("\n", strip=True)

@@ -13,7 +13,12 @@ class Settings:
     token: str = field(repr=False)
 
     def __post_init__(self):
-        if not self.token or not self.token.isascii() or any(c.isspace() for c in self.token):
+        if (
+            not self.token
+            or not self.token.isascii()
+            or not self.token.isprintable()
+            or any(c.isspace() for c in self.token)
+        ):
             raise ValueError("ED_API_TOKEN is missing or invalid in the local .env file.")
 
     @classmethod

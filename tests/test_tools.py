@@ -11,7 +11,7 @@ from edstem_mcp.content import extract_text, html_text, text_slice
 from edstem_mcp.diagnostics import ErrorLog
 from edstem_mcp.files import attachments, read_attachment, safe_url
 from edstem_mcp.search import search_threads
-from edstem_mcp.server import create_server
+from edstem_mcp.server import compact_user, create_server
 
 
 @pytest.mark.parametrize(
@@ -166,3 +166,34 @@ def test_text_extraction_and_pagination():
     }
     with pytest.raises(EdError):
         extract_text(b"binary", "x.exe", "application/octet-stream")
+
+
+def test_ed_links_preserved_in_text():
+    text = html_text('<document><link href="https://example.test/notes">Notes</link></document>')
+    assert "https://example.test/notes" in text
+
+
+def test_nested_error_groups_are_logged_without_messages(tmp_path):
+    log = ErrorLog(tmp_path)
+    log.record("tool_failure", ExceptionGroup("private group", [ValueError("private value")]))
+    data = (tmp_path / "edstem-mcp.jsonl").read_text()
+    assert "private" not in data and json.loads(data)["error_type"] == "ValueError"
+
+
+def test_compact_user_keeps_every_membership_without_settings_noise():
+    data = {
+        "user": {"id": 9},
+        "realms": [],
+        "courses": [
+            {
+                "course": {"id": i, "name": f"Course {i}", "settings": {"huge": "x" * 1000}},
+                "role": {"role": "student", "course_id": i},
+            }
+            for i in range(1, 7)
+        ],
+    }
+    compact = compact_user(data)
+    assert len(compact["courses"]) == 6
+    assert compact["courses"][-1]["course"]["id"] == 6
+    assert "huge" not in json.dumps(compact)
+    assert "settings" in data["courses"][0]["course"]

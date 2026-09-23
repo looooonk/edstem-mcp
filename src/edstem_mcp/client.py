@@ -37,6 +37,17 @@ class EdClient:
             ) from None
         op = operation(name)
         next_query = None
+        required = {
+            "user": {"user": dict, "courses": list},
+            "course": {"course": dict},
+            "thread": {"thread": dict},
+            "course_thread": {"thread": dict},
+            "lesson": {"lesson": dict},
+            "slide": {"slide": dict},
+            "user_stats": {"stats": dict},
+        }
+        if any(not isinstance(data.get(k), typ) for k, typ in required.get(name, {}).items()):
+            raise EdError("Ed's response shape changed; required data is missing.", "schema_error")
         if op.collection and not isinstance(data.get(op.collection), list):
             raise EdError("Ed's response shape changed; collection is missing.", "schema_error")
         if op.paginated and len(data[op.collection]) >= params["limit"]:

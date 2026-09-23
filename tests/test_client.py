@@ -94,3 +94,55 @@ def test_config_hides_token(tmp_path):
     env = tmp_path / ".env"
     env.write_text("ED_API_TOKEN=fake-token\n")
     assert "fake-token" not in repr(Settings.load(env))
+
+
+@pytest.mark.parametrize("value", ["", "has spaces", "nul\x00token", "nonascii\u00e9"])
+def test_bad_token_configuration(value):
+    with pytest.raises(ValueError):
+        Settings(value)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [{}, {"query": ""}, {"query": "\nview=1"}, {"query": "word", "view": 1}, {"query": "x" * 301}],
+)
+async def test_native_search_rejects_bad_parameters_before_network(query):
+    def reject(request):
+        pytest.fail("Invalid native search reached network")
+
+    client = EdClient(Settings("token"), transport=httpx.MockTransport(reject))
+    with pytest.raises(EdError):
+        await client.read("native_search", {"course_id": 1}, query)
+    await client.close()
+
+
+async def test_native_search_query_is_encoded_as_data():
+    def respond(request):
+        assert request.url.path == "/api/courses/1/threads/search"
+        assert request.url.params["query"] == "a&view=1"
+        assert "view" not in request.url.params
+        return httpx.Response(200, json={"threads": [], "total": 0})
+
+    client = EdClient(Settings("token"), transport=httpx.MockTransport(respond))
+    result = await client.read("native_search", {"course_id": 1}, {"query": "a&view=1"})
+    assert result["pagination"]["next_query"] is None
+    await client.close()
+
+
+async def test_invalid_json_and_oversize_are_safe(monkeypatch):
+    import edstem_mcp.client as module
+
+    monkeypatch.setattr(module, "MAX_API_BYTES", 16)
+    for body in [b"private malformed", b"x" * 20]:
+        client = EdClient(
+            Settings("token"),
+            transport=httpx.MockTransport(
+                lambda request, body=body: httpx.Response(
+                    200, content=body, headers={"content-type": "application/json"}
+                )
+            ),
+        )
+        with pytest.raises(EdError) as error:
+            await client.read("user")
+        assert "private" not in str(error.value)
+        await client.close()

@@ -1,3 +1,4 @@
+import asyncio
 import fcntl
 import json
 import os
@@ -84,7 +85,8 @@ class LoggedMCP(FastMCP):
         from mcp.server.fastmcp.exceptions import ToolError
 
         try:
-            return await super().call_tool(name, arguments)
+            async with asyncio.timeout(55):
+                return await super().call_tool(name, arguments)
         except Exception as error:
             operation = arguments.get("operation") if isinstance(arguments, dict) else None
             self.error_log.record("tool_failure", error, tool=name, operation=operation)

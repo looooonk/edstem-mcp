@@ -91,10 +91,18 @@ def create_server(settings: Settings, log_dir: Path, *, client=None):
     ) -> dict[str, Any]:
         """Read a named Ed operation. Reuse pagination.next_query with the same operation/path.
 
-        compact removes body fields only from thread/activity list entries. Use thread for replies
+        compact summarizes user/course membership and removes thread/activity list body fields.
+        list_counts gives list lengths in this response, not counts across unrequested pages.
+        Use thread for replies
         or compact=false for raw data. Arbitrary paths, query keys, and tracking flags are rejected.
         """
         result = await connection(ctx).read(operation, path, query)
+        result["list_counts"] = {
+            k: len(v) for k, v in result["data"].items() if isinstance(v, list)
+        }
+        if compact and operation == "user":
+            result["data"] = compact_user(result["data"])
+            result["compact"] = True
         if compact and operation in {"threads", "native_search", "user_activity"}:
             result["data"] = compact_lists(result["data"])
             result["compact"] = True
@@ -206,6 +214,26 @@ def compact_lists(data):
     if isinstance(data, dict):
         return {k: compact_lists(v) for k, v in data.items() if k not in {"content", "document"}}
     return data
+
+
+def compact_user(data):
+    def select(value, keys):
+        return {k: value[k] for k in keys if k in value}
+
+    result = select(data, ["user", "time"])
+    result["courses"] = [
+        {
+            "course": select(
+                item.get("course", {}), ["id", "code", "name", "year", "session", "status"]
+            ),
+            "role": select(item.get("role", {}), ["user_id", "course_id", "role", "lab_id"]),
+        }
+        for item in data.get("courses", [])
+    ]
+    result["realms"] = [
+        select(item, ["id", "name", "type", "domain", "role"]) for item in data.get("realms", [])
+    ]
+    return result
 
 
 def main():

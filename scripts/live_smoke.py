@@ -193,11 +193,21 @@ async def main():
             assert summary["thread_state_unchanged"]
     client = EdClient(Settings.load(ROOT / ".env"))
     try:
+        direct_user = (await client.read("user"))["data"]
+        assert len(direct_user["courses"]) == expected["course_count"]
+        direct_course = next(
+            x["course"]
+            for x in direct_user["courses"]
+            if x["course"]["id"] == expected["course_id"]
+        )
+        assert direct_course["name"] == expected["course_name"]
         direct = (await client.read("thread", {"thread_id": expected["thread_id"]}))["data"][
             "thread"
         ]
         assert direct["title"] == expected["thread_title"]
         assert direct["number"] == expected["thread_number"]
+        assert len(direct.get("comments", [])) == expected["top_level_comments"]
+        assert len(direct.get("answers", [])) == expected["top_level_answers"]
     finally:
         await client.close()
     log = ROOT / ".local/logs/edstem-mcp.jsonl"

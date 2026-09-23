@@ -9,6 +9,8 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+from edstem_mcp.diagnostics import ErrorLog
+
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / ".local"
 
@@ -151,4 +153,8 @@ def main():
 
 if __name__ == "__main__":
     os.umask(0o077)
-    main()
+    try:
+        main()
+    except Exception as error:
+        ErrorLog(LOCAL / "logs").record("codex_verification_failure", error)
+        raise SystemExit("Codex verification failed; inspect safe local diagnostics.") from None
