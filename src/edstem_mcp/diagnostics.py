@@ -1,0 +1,105 @@
+import fcntl
+import json
+import os
+import sys
+import traceback
+from datetime import UTC, datetime
+from pathlib import Path
+
+from mcp.server.fastmcp import FastMCP
+
+from edstem_mcp.catalog import OPERATIONS, EdError
+
+TOOL_NAMES = {
+    "edstem_find_operations",
+    "edstem_describe_operation",
+    "edstem_read",
+    "edstem_read_text",
+    "edstem_search_threads",
+    "edstem_list_attachments",
+    "edstem_read_attachment",
+}
+
+
+class ErrorLog:
+    def __init__(self, directory: Path, max_bytes: int = 1024 * 1024, backups: int = 3):
+        self.directory, self.max_bytes, self.backups = directory, max_bytes, backups
+
+    def record(self, event: str, error: Exception, *, tool=None, operation=None):
+        cause = error
+        seen = set()
+        while cause.__cause__ is not None and id(cause) not in seen:
+            seen.add(id(cause))
+            cause = cause.__cause__
+        record = {
+            "time": datetime.now(UTC).isoformat(),
+            "event": event,
+            "pid": os.getpid(),
+            "error_type": type(cause).__name__,
+            "tool": tool if tool in TOOL_NAMES else None,
+            "operation": operation
+            if isinstance(operation, str) and operation in OPERATIONS
+            else None,
+            "code": cause.code if isinstance(cause, EdError) else "tool_or_runtime_error",
+            "http_status": cause.http_status if isinstance(cause, EdError) else None,
+            "frames": [
+                {"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name}
+                for frame in traceback.extract_tb(cause.__traceback__)[-6:]
+            ],
+        }
+        # Omit exception messages, arguments, URLs, headers, and response bodies entirely.
+        line = json.dumps(record) + "\n"
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            log = self.directory / "edstem-mcp.jsonl"
+            with os.fdopen(
+                os.open(self.directory / ".lock", os.O_CREAT | os.O_RDWR, 0o600), "w"
+            ) as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                if log.exists() and log.stat().st_size + len(line.encode()) > self.max_bytes:
+                    for index in range(self.backups, 0, -1):
+                        source = log if index == 1 else log.with_suffix(f".jsonl.{index - 1}")
+                        if source.exists():
+                            source.replace(log.with_suffix(f".jsonl.{index}"))
+                with os.fdopen(
+                    os.open(log, os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o600), "a"
+                ) as out:
+                    out.write(line)
+        except OSError:
+            print("Ed MCP could not write its local diagnostic log.", file=sys.stderr)
+
+
+class LoggedMCP(FastMCP):
+    def __init__(self, *args, error_log: ErrorLog, **kwargs):
+        self.error_log = error_log
+        super().__init__(*args, **kwargs)
+
+    async def call_tool(self, name, arguments):
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        try:
+            return await super().call_tool(name, arguments)
+        except Exception as error:
+            operation = arguments.get("operation") if isinstance(arguments, dict) else None
+            self.error_log.record("tool_failure", error, tool=name, operation=operation)
+            cause = error
+            while cause.__cause__ is not None:
+                cause = cause.__cause__
+            message = (
+                str(cause)
+                if isinstance(cause, EdError)
+                else (
+                    "Ed tool failed or arguments were invalid. Inspect the tool schema; "
+                    "safe diagnostics are in .local/logs/edstem-mcp.jsonl."
+                )
+            )
+            raise ToolError(message) from None
+
+    async def read_resource(self, uri):
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        try:
+            return await super().read_resource(uri)
+        except Exception as error:
+            self.error_log.record("resource_failure", error)
+            raise ToolError("Ed resource failed; see the local diagnostic log.") from None
