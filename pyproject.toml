@@ -1,0 +1,34 @@
+[project]
+name = "edstem-mcp"
+version = "0.1.0"
+description = "Personal, local, strictly read-only Ed Discussion MCP for Codex"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "mcp>=1.26,<2",
+  "httpx>=0.28,<1",
+  "python-dotenv>=1.1,<2",
+  "beautifulsoup4>=4.13,<5",
+  "pypdf>=6,<7",
+  "defusedxml>=0.7,<1",
+]
+
+[project.scripts]
+edstem-mcp = "edstem_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "ruff>=0.12,<1"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
