@@ -98,3 +98,11 @@ make verify
 If startup fails, run `uv sync --locked` and rerun the installer. If authentication fails,
 replace the token locally in `.env` and start a new Codex task. Do not paste the token into
 a task or log. To remove the integration, run `codex mcp remove edstem`; the repository remains.
+
+## Validation and verification diagnostics
+
+Verification runs write their MCP diagnostics to ignored `.local/verification/logs/`,
+separately from operational `.local/logs/`. Existing historical logs are retained.
+The `--log-dir` server option selects the diagnostic directory for a launched process.
+Validation errors report schema field names and constraints without echoing input values.
+`edstem_search_threads` requires an integer `course_id` and a `limit` of 1-20.

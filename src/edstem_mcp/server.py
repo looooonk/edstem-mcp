@@ -140,6 +140,7 @@ def create_server(settings: Settings, log_dir: Path, *, client=None):
         category: str | None = None,
     ) -> dict[str, Any]:
         """Search one page of posts locally (AND keywords), optionally including replies.
+        course_id must be a positive JSON integer, not a quoted string. limit is 1-20 (default 10).
         Resume next_offset with identical criteria until null. Partial results are not exhaustive.
         kind can be post/question/announcement. category is an exact category name.
         """
@@ -242,14 +243,15 @@ def main():
     logging.disable(logging.CRITICAL)
     parser = argparse.ArgumentParser(description="Local read-only Edstem MCP (stdio)")
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
+    parser.add_argument("--log-dir", type=Path, default=ROOT / ".local/logs")
     args = parser.parse_args()
-    log_dir = ROOT / ".local/logs"
+    log_dir = args.log_dir
     try:
         settings = Settings.load(args.env_file)
         create_server(settings, log_dir).run(transport="stdio")
     except Exception as error:
         ErrorLog(log_dir).record("server_failure", error)
-        parser.exit(1, "Edstem MCP failed; see .local/logs/edstem-mcp.jsonl.\n")
+        parser.exit(1, "Edstem MCP failed; see the local diagnostic log.\n")
 
 
 if __name__ == "__main__":

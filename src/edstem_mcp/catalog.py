@@ -225,7 +225,10 @@ def prepare(name: str, path: dict, query: dict) -> tuple[str, dict]:
     op = operation(name)
     expected = set(re.findall(r"{(\w+)}", op.path))
     if set(path) != expected:
-        raise EdError("Path parameters must match edstem_describe_operation exactly.")
+        raise EdError(
+            f"Path parameters must be exactly: {', '.join(sorted(expected)) or 'none'}. "
+            "Use edstem_describe_operation for query parameters."
+        )
     for value in path.values():
         if type(value) not in (str, int) or not re.fullmatch(r"[1-9][0-9]{0,18}", str(value)):
             raise EdError("Path IDs must be positive decimal integers, without URLs or slashes.")

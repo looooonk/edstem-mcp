@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
@@ -23,7 +24,13 @@ async def main():
     summary = {"transport": "stdio", "read_only": True}
     expected = {}
     server = StdioServerParameters(
-        command=str(ROOT / ".venv/bin/edstem-mcp"), args=["--env-file", str(ROOT / ".env")]
+        command=str(ROOT / ".venv/bin/edstem-mcp"),
+        args=[
+            "--env-file",
+            str(ROOT / ".env"),
+            "--log-dir",
+            str(ROOT / ".local/verification/logs"),
+        ],
     )
     with (LOCAL / "mcp-stderr.log").open("w") as err:
         async with (
@@ -116,6 +123,14 @@ async def main():
                 "edstem_search_threads", {"course_id": "invalid", "text": "check"}
             )
             assert invalid_schema.isError
+            message = " ".join(c.text for c in invalid_schema.content if c.type == "text")
+            assert "course_id: integer" in message
+            invalid_limit = await session.call_tool(
+                "edstem_search_threads", {"course_id": course["id"], "text": "check", "limit": 50}
+            )
+            assert invalid_limit.isError
+            message = " ".join(c.text for c in invalid_limit.content if c.type == "text")
+            assert "maximum 20" in message
             expected.update(
                 course_id=course["id"],
                 course_name=course["name"],
@@ -144,7 +159,11 @@ async def main():
                         result = await session.call_tool(
                             "edstem_read_attachment", params | {"max_chars": 2000}
                         )
-                        if not result.isError and result.structuredContent.get("text", "").strip():
+                        text = (
+                            result.structuredContent.get("text", "") if not result.isError else ""
+                        )
+                        readable = re.sub(r"(?m)^\[Page \d+\]\s*$", "", text).strip()
+                        if len(readable) >= 30:
                             expected.update(
                                 attachment_source=params,
                                 attachment_text_sample=result.structuredContent["text"],
@@ -210,7 +229,7 @@ async def main():
         assert len(direct.get("answers", [])) == expected["top_level_answers"]
     finally:
         await client.close()
-    log = ROOT / ".local/logs/edstem-mcp.jsonl"
+    log = ROOT / ".local/verification/logs/edstem-mcp.jsonl"
     records = [json.loads(line) for line in log.read_text().splitlines()]
     assert any(r["operation"] == "thread" and r["code"] == "invalid_request" for r in records)
     (LOCAL / "live-expected.json").write_text(json.dumps(expected))
@@ -223,7 +242,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except Exception as error:
-        ErrorLog(LOCAL / "logs").record("live_verification_failure", error)
+        ErrorLog(LOCAL / "verification/logs").record("live_verification_failure", error)
         raise SystemExit(
             "Live verification failed; no private response or exception was printed."
         ) from None
