@@ -106,3 +106,11 @@ separately from operational `.local/logs/`. Existing historical logs are retaine
 The `--log-dir` server option selects the diagnostic directory for a launched process.
 Validation errors report schema field names and constraints without echoing input values.
 `edstem_search_threads` requires an integer `course_id` and a `limit` of 1-20.
+
+## Course changes
+
+Use `edstem_changes(course_id="123")` for a baseline, follow every `continuation`,
+and save the final `next_cursor` for your next check. Full reconciliation revisits
+old threads and nested replies. View counts and read-state noise are excluded.
+See [change-feed.md](docs/change-feed.md) for the consistent three-connector schema,
+coverage, local-state privacy, retries and examples.

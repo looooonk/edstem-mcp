@@ -124,7 +124,7 @@ async def test_tools_annotations_safe_errors_and_logging(tmp_path):
     )
     server = create_server(Settings("secret-token"), tmp_path, client=client)
     tools = await server.list_tools()
-    assert len(tools) == 8
+    assert len(tools) == 9
     assert all(t.outputSchema is not None for t in tools if t.name != "edstem_read_image")
     assert all(t.annotations.readOnlyHint and not t.annotations.destructiveHint for t in tools)
     for name, args in [

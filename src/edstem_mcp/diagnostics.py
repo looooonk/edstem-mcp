@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from edstem_mcp.catalog import OPERATIONS, EdError
 
 TOOL_NAMES = {
+    "edstem_changes",
     "edstem_find_operations",
     "edstem_describe_operation",
     "edstem_read",

@@ -57,3 +57,13 @@ using the command registered in Codex. Offline checks passed with
 88 tests. Operational log contents remained unchanged throughout verification.
 Attachment reference selection requires readable text beyond PDF page labels, so scanned
 PDFs with no extracted body text cannot count as successful quotation samples.
+
+## Version 0.2.0 validation, October 30, 2026
+
+Ruff check and format checks passed; the offline synthetic suite passed 102 tests.
+New tests cover baseline/resume/replay, change pagination, scope/role/expiry isolation,
+partial failure retention, deadline updates, noise normalization and read-only boundaries.
+An explicit bounded live baseline/resume read succeeded; full course reconciliation is
+covered synthetically, including changed replies on old threads with unchanged post order.
+Deployment and Mac session results are reported separately; these test results alone
+do not establish a deployed cloud version or a physical Mac-off test.

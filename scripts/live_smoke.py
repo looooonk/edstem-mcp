@@ -39,7 +39,7 @@ async def main():
         ):
             await session.initialize()
             listed = await session.list_tools()
-            assert len(listed.tools) == 8
+            assert len(listed.tools) == 9
             assert all(t.annotations.readOnlyHint for t in listed.tools)
 
             async def call(name, args):

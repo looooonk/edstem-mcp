@@ -81,3 +81,10 @@ There are no chat/notification reads, WebSockets, bulk export POSTs, API token m
 user administration, external website fetches, workspace launches, code execution, submission
 or assessment-start routes. These omissions prevent known or insufficiently understood writes.
 The integration is broad, but is not a complete implementation of Ed's website or private API.
+
+## Change feed, October 30, 2026
+
+No upstream route was added. The feed reuses `user`, `threads` and `thread` from
+this reviewed catalog. It follows every bounded list page and reads full threads,
+including nested answers/comments on older threads. It never sends `view` or read flags,
+opens WebSockets, acknowledges notifications, or invokes a mutation. See change-feed.md.
