@@ -11,6 +11,7 @@ from mcp.server.fastmcp import Context
 from mcp.types import ImageContent, TextContent, ToolAnnotations
 from pydantic import Field
 
+from edstem_mcp import feed_operation
 from edstem_mcp.catalog import OPERATIONS, EdError, describe
 from edstem_mcp.changefeed import ChangeFeed, FeedError, digest
 from edstem_mcp.changes import EdChanges
@@ -46,6 +47,11 @@ GUIDE += (
     "\nUse edstem_changes(course_id) to establish a baseline; follow "
     "continuation, then save next_cursor. Coverage is explicit and "
     "incomplete reads never imply deletion. See docs/change-feed.md.\n"
+)
+GUIDE += (
+    '\nExisting clients can use edstem_read(operation="changes", '
+    'path={"course_id":"123","feed":{"budget":1}}). Describe changes for cursor semantics. '
+    "The full feed is returned in data; do not apply API pagination or field projections.\n"
 )
 READ_ONLY = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True
@@ -98,21 +104,25 @@ def create_server(settings: Settings, log_dir: Path, *, client=None):
         try:
             return await feed.read(connection(ctx), course_id, cursor, continuation, limit, budget)
         except FeedError as error:
-            raise EdError(str(error)) from error
+            raise EdError(str(error)) from None
 
     @mcp.tool(annotations=READ_ONLY)
     def edstem_find_operations(search: str = "") -> dict[str, Any]:
         """Discover supported read-only Edstem operations by topic or name; empty lists all."""
         words = search.casefold().split()
+        summaries = {name: op.summary for name, op in OPERATIONS.items()}
+        summaries["changes"] = feed_operation.SUMMARY
         return {
-            name: op.summary
-            for name, op in OPERATIONS.items()
-            if all(w in (name + " " + op.summary).casefold() for w in words)
+            name: summary
+            for name, summary in summaries.items()
+            if all(w in (name + " " + summary).casefold() for w in words)
         }
 
     @mcp.tool(annotations=READ_ONLY)
     def edstem_describe_operation(operation: str) -> dict[str, Any]:
         """Inspect an operation's exact path/query parameters, limits, evidence, and caveats."""
+        if operation == "changes":
+            return feed_operation.describe("edstem", EdChanges.coverage)
         return describe(operation)
 
     @mcp.tool(annotations=READ_ONLY)
@@ -130,6 +140,14 @@ def create_server(settings: Settings, log_dir: Path, *, client=None):
         Use thread for replies
         or compact=false for raw data. Arbitrary paths, query keys, and tracking flags are rejected.
         """
+        if operation == "changes":
+            try:
+                if query not in (None, {}):
+                    raise FeedError("changes options belong in path.feed; omit query.")
+                result = await edstem_changes(ctx=ctx, **feed_operation.arguments(path))
+                return feed_operation.envelope(result)
+            except FeedError as error:
+                raise EdError(str(error)) from None
         result = await connection(ctx).read(operation, path, query)
         result["list_counts"] = {
             k: len(v) for k, v in result["data"].items() if isinstance(v, list)
@@ -238,7 +256,10 @@ def create_server(settings: Settings, log_dir: Path, *, client=None):
 
     @mcp.resource("edstem://operations", mime_type="application/json")
     def operations() -> str:
-        return json.dumps({name: describe(name) for name in OPERATIONS})
+        return json.dumps(
+            {name: describe(name) for name in OPERATIONS}
+            | {"changes": feed_operation.describe("edstem", EdChanges.coverage)}
+        )
 
     return mcp
 

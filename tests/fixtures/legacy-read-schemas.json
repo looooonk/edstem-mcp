@@ -1,0 +1,70 @@
+{
+  "edstem_find_operations": {
+    "properties": {
+      "search": {
+        "default": "",
+        "title": "Search",
+        "type": "string"
+      }
+    },
+    "title": "edstem_find_operationsArguments",
+    "type": "object"
+  },
+  "edstem_describe_operation": {
+    "properties": {
+      "operation": {
+        "title": "Operation",
+        "type": "string"
+      }
+    },
+    "required": [
+      "operation"
+    ],
+    "title": "edstem_describe_operationArguments",
+    "type": "object"
+  },
+  "edstem_read": {
+    "properties": {
+      "operation": {
+        "title": "Operation",
+        "type": "string"
+      },
+      "path": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Path"
+      },
+      "query": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Query"
+      },
+      "compact": {
+        "default": true,
+        "title": "Compact",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "operation"
+    ],
+    "title": "edstem_readArguments",
+    "type": "object"
+  }
+}

@@ -88,3 +88,8 @@ No upstream route was added. The feed reuses `user`, `threads` and `thread` from
 this reviewed catalog. It follows every bounded list page and reads full threads,
 including nested answers/comments on older threads. It never sends `view` or read flags,
 opens WebSockets, acknowledges notifications, or invokes a mutation. See change-feed.md.
+
+The `changes` operation is local snapshot reconciliation exposed through the existing read
+wrapper; it is deliberately absent from the HTTP route catalog. Its arguments are validated
+before authorization and campus reads. It delegates only to the same reviewed adapters as
+the dedicated feed tool, adding no upstream routes or methods. See `docs/change-feed.md`.

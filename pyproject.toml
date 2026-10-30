@@ -1,6 +1,6 @@
 [project]
 name = "edstem-mcp"
-version = "0.2.1"
+version = "0.2.2"
 description = "Personal, local, strictly read-only Ed Discussion MCP for Codex"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

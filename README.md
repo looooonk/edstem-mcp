@@ -114,3 +114,7 @@ and save the final `next_cursor` for your next check. Full reconciliation revisi
 old threads and nested replies. View counts and read-state noise are excluded.
 See [change-feed.md](docs/change-feed.md) for the consistent three-connector schema,
 coverage, local-state privacy, retries and examples.
+
+Clients with cached tool lists can use `edstem_read(operation="changes",
+path={"course_id":"123","feed":{"budget":1}})`. Discover/describe the `changes`
+operation for baseline, continuation and checkpoint semantics. The complete feed is in `data`.
